@@ -15,6 +15,7 @@ export const FormulaInput: React.FC = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [tags, setTags] = useState<Tag[]>([]);
+  const [formula, setFormula] = useState<(string | Tag)[]>([]);
   const [isFocused, setIsFocused] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,17 +73,20 @@ export const FormulaInput: React.FC = () => {
 
   const removeTag = (id: string) => {
     setTags(tags.filter((tag) => tag.id !== id));
+    setFormula(formula.filter((item) => (typeof item === 'string' || item.id !== id)));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
-      // Remove the last tag when backspace is pressed and input is empty
-      setTags(tags.slice(0, -1));
+    if (e.key === 'Backspace' && inputValue === '' && formula.length > 0) {
+      setFormula(formula.slice(0, -1));
     } else if (e.key === 'Enter' && inputValue) {
       e.preventDefault();
       handleAddItem();
+    } else if (operands.includes(e.key)) {
+      e.preventDefault();
+      setFormula([...formula, e.key]);
+      setInputValue('');
     } else if (e.key === ' ' && inputValue.trim()) {
-      // Add a new tag when space is pressed and there's input
       e.preventDefault();
       handleAddItem();
     }
@@ -90,18 +94,23 @@ export const FormulaInput: React.FC = () => {
 
   const handleAddItem = () => {
     if (inputValue.trim()) {
-      // Only add API suggestions as tags
-      const suggestion = suggestions.find((s) => s.name === inputValue);
-      if (suggestion) {
-        addTag({ value: inputValue, type: 'tag' });
-        setInputValue('');
-        setShowSuggestions(false);
+      if (!isNaN(Number(inputValue))) {
+        setFormula([...formula, inputValue]);
+      } else {
+        const suggestion = suggestions.find((s) => s.name === inputValue);
+        if (suggestion) {
+          const newTag = addTag({ value: inputValue, type: 'tag' });
+          setFormula([...formula, newTag]);
+        }
       }
+      setInputValue('');
+      setShowSuggestions(false);
     }
   };
 
   const handleSuggestionClick = (suggestion: Suggestion) => {
-    addTag({ value: suggestion.name, type: 'tag' });
+    const newTag = addTag({ value: suggestion.name, type: 'tag' });
+    setFormula([...formula, newTag]);
     setInputValue('');
     setShowSuggestions(false);
     inputRef.current?.focus();
@@ -111,7 +120,6 @@ export const FormulaInput: React.FC = () => {
     inputRef.current?.focus();
   };
 
-  // Only show suggestions if we have matches and not loading
   const shouldShowSuggestions = showSuggestions && !isLoading && suggestions.length > 0;
 
   return (
@@ -126,24 +134,33 @@ export const FormulaInput: React.FC = () => {
         }`}
         onClick={focusInput}
       >
-        {tags.map((tag) => (
-          <div
-            key={tag.id}
-            className="flex items-center m-1 px-2 py-1 rounded-md border bg-blue-100 text-blue-800 border-blue-200"
-          >
-            <span className="text-sm font-medium">{tag.value}</span>
-            <button
-              type="button"
-              className="ml-1 text-gray-500 hover:text-gray-700 focus:outline-none"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeTag(tag.id);
-              }}
+        {/* Render the formula */}
+        {formula.map((item, index) =>
+          typeof item === 'string' ? (
+            // Render numbers or operands as plain text
+            <span key={`plain-${index}-${item}`} className="text-sm font-medium text-gray-700">
+              {item}
+            </span>
+          ) : (
+            // Render tags with the × icon
+            <div
+              key={`tag-${item.id}`}
+              className="flex items-center m-1 px-2 py-1 rounded-md border bg-blue-100 text-blue-800 border-blue-200"
             >
-              <span className="text-xs">×</span>
-            </button>
-          </div>
-        ))}
+              <span className="text-sm font-medium">{item.value}</span>
+              <button
+                type="button"
+                className="ml-1 text-gray-500 hover:text-gray-700 focus:outline-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeTag(item.id);
+                }}
+              >
+                <span className="text-xs">×</span>
+              </button>
+            </div>
+          )
+        )}
 
         <input
           id="formula-input"
@@ -162,7 +179,7 @@ export const FormulaInput: React.FC = () => {
           onBlur={() => {
             setIsFocused(false);
           }}
-          placeholder={tags.length > 0 ? "" : "Type to enter formula..."}
+          placeholder={formula.length > 0 ? "" : "Type to enter formula..."}
         />
       </div>
 
