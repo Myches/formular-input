@@ -211,9 +211,7 @@ export const FormulaInput: React.FC = () => {
         </div>
       )}
 
-      <p className="mt-2 text-xs text-gray-500">
-        Press space or enter to add an item. Use operators (+, -, *, /, ^, (, )) and numbers directly.
-      </p>
+    
     </div>
   );
 };
