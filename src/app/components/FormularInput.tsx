@@ -1,217 +1,174 @@
-"use client";
-
-import React, { useState, useRef, useEffect } from "react";
-import { useSuggestions } from "../api/api";
-import { Suggestion } from "../types/formular";
-import { v4 as uuidv4 } from "uuid"; // Import UUID library for unique IDs
-
-interface Tag {
-  id: string;
-  value: string;
-  type: "tag";
-}
+// components/FormulaInput.tsx
+import React, { useState, useRef, useEffect } from 'react';
+import { useFormulaStore } from '../store/formular-store';
+import { useSuggestions } from '../api/api';
+import { Suggestion } from '../types/formular';
 
 export const FormulaInput: React.FC = () => {
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [formula, setFormula] = useState<(string | Tag)[]>([]);
-  const [isFocused, setIsFocused] = useState(false);
-
+  const [result, setResult] = useState<number | null>(null);
+  
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-
+  
+  const { tags, addTag, removeTag, selectedTagId, setSelectedTagId, calculateFormula } = useFormulaStore();
+  
   const { data: suggestions = [], isLoading } = useSuggestions(inputValue);
-
-  const operands = ["+", "-", "*", "/", "(", ")", "^"];
-
-  // Handle clicks outside the suggestions dropdown
+  
+  const operands = ['+', '-', '*', '/', '(', ')', '^'];
+  
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        inputRef.current &&
+        suggestionsRef.current && 
+        !suggestionsRef.current.contains(event.target as Node) && 
+        inputRef.current && 
         !inputRef.current.contains(event.target as Node)
       ) {
         setShowSuggestions(false);
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
+    
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
-  // Update suggestion position
-  useEffect(() => {
-    if (showSuggestions && inputRef.current) {
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+    setShowSuggestions(true);
+    
+    if (inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect();
       setCursorPosition({
         x: rect.left,
-        y: rect.bottom + window.scrollY,
+        y: rect.bottom
       });
     }
-  }, [showSuggestions, inputValue]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-    if (e.target.value.trim()) {
-      setShowSuggestions(true);
-    } else {
-      setShowSuggestions(false);
-    }
   };
-
-  const addTag = (tag: Omit<Tag, "id">) => {
-    const newTag = { ...tag, id: uuidv4() }; // Use UUID for unique IDs
-    setTags([...tags, newTag]);
-    return newTag;
-  };
-
-  const removeTag = (id: string) => {
-    setTags(tags.filter((tag) => tag.id !== id));
-    setFormula(formula.filter((item) => typeof item === "string" || item.id !== id));
-  };
-
+  
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && inputValue === "" && formula.length > 0) {
-      setFormula(formula.slice(0, -1));
-    } else if (e.key === "Enter" && inputValue) {
-      e.preventDefault();
+    if (e.key === 'Backspace' && inputValue === '' && tags.length > 0) {
+    
+      const lastTag = tags[tags.length - 1];
+      removeTag(lastTag.id);
+    } else if (e.key === 'Enter' && inputValue) {
       handleAddItem();
     } else if (operands.includes(e.key)) {
       e.preventDefault();
-      setFormula([...formula, e.key]);
-      setInputValue("");
-    } else if (e.key === " " && inputValue.trim()) {
-      e.preventDefault();
+      addTag({ value: e.key, type: 'operand' });
+      setInputValue('');
+    } else if (e.key === ' ' && inputValue.trim()) {
+      // Add a new tag when space is pressed and there's input
       handleAddItem();
     }
   };
-
+  
   const handleAddItem = () => {
     if (inputValue.trim()) {
       if (!isNaN(Number(inputValue))) {
-        // If the input is a number, add it to the formula
-        setFormula([...formula, inputValue]);
+        // It's a number
+        addTag({ value: inputValue, type: 'number' });
       } else {
-        // If the input is a suggestion, find the matching suggestion and add it as a tag
-        const suggestion = suggestions.find((s) => s.name === inputValue);
-        if (suggestion) {
-          const newTag = addTag({ value: inputValue, type: "tag" });
-          setFormula([...formula, newTag]);
-        }
+        // It's a tag
+        addTag({ value: inputValue, type: 'tag' });
       }
-      // Clear the input value and hide suggestions
-      setInputValue("");
+      setInputValue('');
       setShowSuggestions(false);
     }
   };
-
+  
   const handleSuggestionClick = (suggestion: Suggestion) => {
-    const newTag = addTag({ value: suggestion.name, type: "tag" });
-    setFormula([...formula, newTag]);
-    setInputValue("");
+    addTag({ value: suggestion.name, type: 'tag' });
+    setInputValue('');
     setShowSuggestions(false);
     inputRef.current?.focus();
   };
-
-  const focusInput = () => {
-    inputRef.current?.focus();
+  
+  const handleTagClick = (tagId: string) => {
+    setSelectedTagId(tagId);
   };
-
-  const shouldShowSuggestions = showSuggestions && !isLoading && suggestions.length > 0;
-
+  
+  const handleCalculate = () => {
+    const value = calculateFormula();
+    setResult(value);
+  };
+  
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <label htmlFor="formula-input" className="block text-sm font-medium text-gray-700 mb-1">
-        Formula Input
-      </label>
-      <div
-        ref={containerRef}
-        className={`border rounded-lg p-2 flex flex-wrap items-center bg-white transition-all duration-200 ${
-          isFocused ? "border-blue-500 ring-2 ring-blue-100" : "border-gray-300 hover:border-gray-400"
-        }`}
-        onClick={focusInput}
-      >
-        {/* Render the formula */}
-        {formula.map((item, index) =>
-          typeof item === "string" ? (
-            // Render numbers or operands as plain text
-            <span key={`plain-${index}-${item}`} className="text-sm font-medium text-gray-700">
-              {item}
-            </span>
-          ) : (
-            // Render tags with the × icon
-            <div
-              key={`tag-${item.id}`} // Use the tag's unique id as the key
-              className="flex items-center m-1 px-2 py-1 rounded-md border bg-blue-100 text-blue-800 border-blue-200"
-            >
-              <span className="text-sm font-medium">{item.value}</span>
-              <button
-                type="button"
-                className="ml-1 text-gray-500 hover:text-gray-700 focus:outline-none"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeTag(item.id);
-                }}
-              >
-                <span className="text-xs">×</span>
-              </button>
-            </div>
-          )
-        )}
-
+    <div className="w-full max-w-2xl mx-auto mt-10">
+      <div className="border border-gray-300 rounded-md p-2 flex flex-wrap items-center bg-white">
+        {tags.map((tag) => (
+          <div 
+            key={tag.id}
+            className={`flex items-center m-1 px-2 py-1 rounded ${
+              tag.type === 'tag' 
+                ? 'bg-blue-100 text-blue-800' 
+                : tag.type === 'operand' 
+                ? 'bg-gray-200 text-gray-800' 
+                : 'bg-green-100 text-green-800'
+            } ${selectedTagId === tag.id ? 'ring-2 ring-blue-500' : ''}`}
+            onClick={() => handleTagClick(tag.id)}
+          >
+            <span>{tag.value}</span>
+          </div>
+        ))}
+        
         <input
-          id="formula-input"
           ref={inputRef}
           type="text"
-          className="flex-grow outline-none px-2 py-1.5 min-w-20 text-gray-700 placeholder-gray-400 text-sm"
+          className="flex-grow outline-none px-2 py-1 min-w-20"
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            setIsFocused(true);
-            if (inputValue.trim() && suggestions.length > 0) {
-              setShowSuggestions(true);
-            }
+            if (inputValue) setShowSuggestions(true);
           }}
-          onBlur={() => {
-            setIsFocused(false);
-          }}
-          placeholder={formula.length > 0 ? "" : "Type to enter formula..."}
+          placeholder="Enter formular"
         />
       </div>
-
-      {shouldShowSuggestions && (
-        <div
+      
+      {showSuggestions && suggestions.length > 0 && (
+        <div 
           ref={suggestionsRef}
-          className="absolute z-10 mt-1 w-64 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg"
+          className="absolute z-10 mt-2 w-64 max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg"
           style={{
             left: cursorPosition.x,
-            top: cursorPosition.y,
+            top: cursorPosition.y
           }}
         >
-          <ul className="py-1">
+          <ul>
             {suggestions.map((suggestion) => (
-              <li
-                key={suggestion.id} // Ensure each suggestion has a unique key
-                className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+              <li 
+                key={suggestion.id}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                 onClick={() => handleSuggestionClick(suggestion)}
               >
-                <div className="font-medium text-sm">{suggestion.name}</div>
+                <div className="font-medium">{suggestion.name}</div>
                 <div className="text-xs text-gray-500">{suggestion.category}</div>
               </li>
             ))}
           </ul>
         </div>
       )}
-
-    
+      
+      <div className="mt-4 flex space-x-4">
+        <button 
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
+          onClick={handleCalculate}
+        >
+          Calculate
+        </button>
+        
+        {result !== null && (
+          <div className="flex items-center">
+            <span className="font-medium mr-2">Result:</span>
+            <span>{result}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
