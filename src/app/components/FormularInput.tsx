@@ -15,7 +15,7 @@ export const FormulaInput: React.FC = () => {
   
   const { tags, addTag, removeTag, selectedTagId, setSelectedTagId, calculateFormula } = useFormulaStore();
   
-  const { data: suggestions = [], isLoading } = useSuggestions(inputValue);
+  const { data: suggestions = [] } = useSuggestions(inputValue);
   
   const operands = ['+', '-', '*', '/', '(', ')', '^'];
   
@@ -70,10 +70,8 @@ export const FormulaInput: React.FC = () => {
   const handleAddItem = () => {
     if (inputValue.trim()) {
       if (!isNaN(Number(inputValue))) {
-        // It's a number
         addTag({ value: inputValue, type: 'number' });
       } else {
-        // It's a tag
         addTag({ value: inputValue, type: 'tag' });
       }
       setInputValue('');
